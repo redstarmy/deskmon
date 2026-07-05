@@ -69,3 +69,72 @@ final class ServerInfo: Identifiable {
         }
     }
 }
+
+struct StoredServerInfo: Codable, Sendable {
+    var id: UUID
+    var name: String
+    var host: String
+    var username: String
+    var sshPort: Int
+    var agentPort: Int
+    var hasKeyInstalled: Bool
+
+    @MainActor
+    init(_ server: ServerInfo) {
+        id = server.id
+        name = server.name
+        host = server.host
+        username = server.username
+        sshPort = server.sshPort
+        agentPort = server.agentPort
+        hasKeyInstalled = server.hasKeyInstalled
+    }
+
+    @MainActor
+    var serverInfo: ServerInfo {
+        ServerInfo(
+            id: id,
+            name: name,
+            host: host,
+            username: username,
+            sshPort: sshPort,
+            agentPort: agentPort,
+            hasKeyInstalled: hasKeyInstalled
+        )
+    }
+}
+
+enum ServerStore {
+    private static let serversKey = "SavedServers"
+    private static let selectedServerKey = "SelectedServerID"
+
+    @MainActor
+    static func load() -> [ServerInfo] {
+        guard let data = UserDefaults.standard.data(forKey: serversKey),
+              let storedServers = try? JSONDecoder().decode([StoredServerInfo].self, from: data) else {
+            return []
+        }
+        return storedServers.map(\.serverInfo)
+    }
+
+    @MainActor
+    static func save(_ servers: [ServerInfo]) {
+        let storedServers = servers.map(StoredServerInfo.init)
+        if let data = try? JSONEncoder().encode(storedServers) {
+            UserDefaults.standard.set(data, forKey: serversKey)
+        }
+    }
+
+    static func loadSelectedServerID() -> UUID? {
+        guard let rawValue = UserDefaults.standard.string(forKey: selectedServerKey) else { return nil }
+        return UUID(uuidString: rawValue)
+    }
+
+    static func saveSelectedServerID(_ id: UUID?) {
+        if let id {
+            UserDefaults.standard.set(id.uuidString, forKey: selectedServerKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: selectedServerKey)
+        }
+    }
+}

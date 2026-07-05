@@ -7,7 +7,9 @@ import SwiftUI
 @Observable
 final class ServerManager {
     var servers: [ServerInfo] = []
-    var selectedServerID: UUID?
+    var selectedServerID: UUID? {
+        didSet { ServerStore.saveSelectedServerID(selectedServerID) }
+    }
     var isConnected = false
     var alertManager: AlertManager?
 
@@ -15,6 +17,16 @@ final class ServerManager {
     private let client = AgentClient.shared
     private var sshManagers: [UUID: SSHManager] = [:]
     private var streamTasks: [UUID: Task<Void, Never>] = [:]
+
+    init() {
+        servers = ServerStore.load()
+        selectedServerID = ServerStore.loadSelectedServerID()
+        if let selectedServerID, !servers.contains(where: { $0.id == selectedServerID }) {
+            self.selectedServerID = servers.first?.id
+        } else if selectedServerID == nil {
+            selectedServerID = servers.first?.id
+        }
+    }
 
     var selectedServer: ServerInfo? {
         servers.first { $0.id == selectedServerID }
@@ -366,6 +378,7 @@ final class ServerManager {
             try await SSHKeyGenerator.installPublicKey(on: ssh, authorizedKeysLine: keyPair.authorizedKeysLine)
             try KeychainStore.savePrivateKey(keyPair.privateKeyData, for: server.id)
             server.hasKeyInstalled = true
+            saveServers()
             Self.log.info("SSH key installed for \(server.name)")
         } catch {
             Self.log.error("SSH key install failed for \(server.name): \(error.localizedDescription)")
@@ -380,6 +393,7 @@ final class ServerManager {
         if selectedServerID == nil {
             selectedServerID = server.id
         }
+        saveServers()
         return server
     }
 
@@ -400,6 +414,7 @@ final class ServerManager {
             server.hasKeyInstalled = false
             Task { await reconnectServer(server) }
         }
+        saveServers()
     }
 
     func deleteServer(_ server: ServerInfo) {
@@ -413,6 +428,7 @@ final class ServerManager {
         if selectedServerID == server.id {
             selectedServerID = servers.first?.id
         }
+        saveServers()
     }
 
     func selectServer(_ server: ServerInfo) {
@@ -464,5 +480,9 @@ final class ServerManager {
             return .warning
         }
         return .healthy
+    }
+
+    private func saveServers() {
+        ServerStore.save(servers)
     }
 }

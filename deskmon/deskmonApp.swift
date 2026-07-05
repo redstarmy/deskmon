@@ -15,6 +15,7 @@ struct deskmonApp: App {
                 .task {
                     serverManager.alertManager = alertManager
                     alertManager.requestPermissionIfNeeded()
+                    serverManager.startStreaming()
                 }
         } label: {
             MenuBarLabel(status: serverManager.currentStatus)
